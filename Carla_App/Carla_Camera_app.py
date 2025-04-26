@@ -127,45 +127,6 @@ class SensorManager:
             camera.listen(self.save_rgb_image)
 
             return camera
-
-        elif sensor_type == 'LiDAR':
-            lidar_bp = self.world.get_blueprint_library().find('sensor.lidar.ray_cast')
-            lidar_bp.set_attribute('range', '100')
-            lidar_bp.set_attribute('dropoff_general_rate', lidar_bp.get_attribute('dropoff_general_rate').recommended_values[0])
-            lidar_bp.set_attribute('dropoff_intensity_limit', lidar_bp.get_attribute('dropoff_intensity_limit').recommended_values[0])
-            lidar_bp.set_attribute('dropoff_zero_intensity', lidar_bp.get_attribute('dropoff_zero_intensity').recommended_values[0])
-
-            for key in sensor_options:
-                lidar_bp.set_attribute(key, sensor_options[key])
-
-            lidar = self.world.spawn_actor(lidar_bp, transform, attach_to=attached)
-
-            lidar.listen(self.save_lidar_image)
-
-            return lidar
-        
-        elif sensor_type == 'SemanticLiDAR':
-            lidar_bp = self.world.get_blueprint_library().find('sensor.lidar.ray_cast_semantic')
-            lidar_bp.set_attribute('range', '100')
-
-            for key in sensor_options:
-                lidar_bp.set_attribute(key, sensor_options[key])
-
-            lidar = self.world.spawn_actor(lidar_bp, transform, attach_to=attached)
-
-            lidar.listen(self.save_semanticlidar_image)
-
-            return lidar
-        
-        elif sensor_type == "Radar":
-            radar_bp = self.world.get_blueprint_library().find('sensor.other.radar')
-            for key in sensor_options:
-                radar_bp.set_attribute(key, sensor_options[key])
-
-            radar = self.world.spawn_actor(radar_bp, transform, attach_to=attached)
-            radar.listen(self.save_radar_image)
-
-            return radar
         
         else:
             return None
@@ -220,15 +181,21 @@ class SensorManager:
           left_fit_average = np.average(left_fit, axis=0)
           left_line = self.make_coordinates(lane_image, left_fit_average)    
           x1, y1, x2, y2 = left_line
-          cv2.line(lane_image, (x1, y1), (x2, y2), (0, 0, 255), 3)
-          #print("left_line", len(left_line))
+          parameters = np.polyfit((x1, x2), (y1, y2), 1)
+          slope = parameters[0]
+          if slope < -0.7 and slope > -1.0:
+            cv2.line(lane_image, (x1, y1), (x2, y2), (0, 0, 255), 3)
+            #print("left_line", len(left_line))
 
         
         if len(right_fit) > 0:      
           right_fit_average = np.average(right_fit, axis=0)
-          right_line = self.make_coordinates(lane_image, right_fit_average)   
+          right_line = self.make_coordinates(lane_image, right_fit_average)
           x1, y1, x2, y2 = right_line
-          cv2.line(lane_image, (x1, y1), (x2, y2), (0, 0, 255), 3)
+          parameters = np.polyfit((x1, x2), (y1, y2), 1)
+          slope = parameters[0]  
+          if slope > 0.7 and slope < 1.0:
+           cv2.line(lane_image, (x1, y1), (x2, y2), (0, 0, 255), 3)
 
 
         #if lines is not None:
@@ -258,67 +225,6 @@ class SensorManager:
         self.time_processing += (t_end-t_start)
         self.tics_processing += 1
 
-    def save_lidar_image(self, image):
-        t_start = self.timer.time()
-
-        disp_size = self.display_man.get_display_size()
-        lidar_range = 2.0*float(self.sensor_options['range'])
-
-        points = np.frombuffer(image.raw_data, dtype=np.dtype('f4'))
-        points = np.reshape(points, (int(points.shape[0] / 4), 4))
-        lidar_data = np.array(points[:, :2])
-        lidar_data *= min(disp_size) / lidar_range
-        lidar_data += (0.5 * disp_size[0], 0.5 * disp_size[1])
-        lidar_data = np.fabs(lidar_data)  # pylint: disable=E1111
-        lidar_data = lidar_data.astype(np.int32)
-        lidar_data = np.reshape(lidar_data, (-1, 2))
-        lidar_img_size = (disp_size[0], disp_size[1], 3)
-        lidar_img = np.zeros((lidar_img_size), dtype=np.uint8)
-
-        lidar_img[tuple(lidar_data.T)] = (255, 255, 255)
-
-        if self.display_man.render_enabled():
-            self.surface = pygame.surfarray.make_surface(lidar_img)
-
-        t_end = self.timer.time()
-        self.time_processing += (t_end-t_start)
-        self.tics_processing += 1
-
-    def save_semanticlidar_image(self, image):
-        t_start = self.timer.time()
-
-        disp_size = self.display_man.get_display_size()
-        lidar_range = 2.0*float(self.sensor_options['range'])
-
-        points = np.frombuffer(image.raw_data, dtype=np.dtype('f4'))
-        points = np.reshape(points, (int(points.shape[0] / 6), 6))
-        lidar_data = np.array(points[:, :2])
-        lidar_data *= min(disp_size) / lidar_range
-        lidar_data += (0.5 * disp_size[0], 0.5 * disp_size[1])
-        lidar_data = np.fabs(lidar_data)  # pylint: disable=E1111
-        lidar_data = lidar_data.astype(np.int32)
-        lidar_data = np.reshape(lidar_data, (-1, 2))
-        lidar_img_size = (disp_size[0], disp_size[1], 3)
-        lidar_img = np.zeros((lidar_img_size), dtype=np.uint8)
-
-        lidar_img[tuple(lidar_data.T)] = (255, 255, 255)
-
-        if self.display_man.render_enabled():
-            self.surface = pygame.surfarray.make_surface(lidar_img)
-
-        t_end = self.timer.time()
-        self.time_processing += (t_end-t_start)
-        self.tics_processing += 1
-
-    def save_radar_image(self, radar_data):
-        t_start = self.timer.time()
-        points = np.frombuffer(radar_data.raw_data, dtype=np.dtype('f4'))
-        points = np.reshape(points, (len(radar_data), 4))
-
-        t_end = self.timer.time()
-        self.time_processing += (t_end-t_start)
-        self.tics_processing += 1
-
     def render(self):
         if self.surface is not None:
             offset = self.display_man.get_display_offset(self.display_pos)
@@ -338,7 +244,6 @@ def run_simulation(args, client):
     timer = CustomTimer()
     udpserver = UDP_Server.Server()
     udpserver.start()
-
 
     try:
         # Getting the world and
@@ -383,7 +288,6 @@ def run_simulation(args, client):
 
         #Simulation loop
         call_exit = False
-        time_init_sim = timer.time()
         clock = pygame.time.Clock()
         while True:
             start_time = time.time()  # Record the start time of the loop
@@ -428,14 +332,13 @@ def run_simulation(args, client):
             display_manager.destroy()
 
         client.apply_batch([carla.command.DestroyActor(x) for x in vehicle_list])
-
         world.apply_settings(original_settings)
 
 
 
 def main():
     argparser = argparse.ArgumentParser(
-        description='CARLA Sensor tutorial')
+        description='CARLA Camera Sensor')
     argparser.add_argument(
         '--host',
         metavar='H',
@@ -478,5 +381,4 @@ def main():
 
 
 if __name__ == '__main__':
-
     main()

@@ -78,14 +78,12 @@ class Server():
       gear , rpm = self.calculate_rpm(speed)
       temperature = random.randint(70, 110)
       fuel = random.randint(0, 100)
-      #gear = random.choice(['P', 'R', 'N', 'D'])
 
       # Create a data packet
       data_packet = f"SPEED:{speed},RPM:{rpm},TEMP:{temperature},FUEL:{fuel},GEAR:{gear}"
-      #print(f"Data packet: {data_packet}")
       # Send the data packet to the client
       self.sock.sendto(data_packet.encode(), self.Client_addr)
-      print(f"Sent data: {data_packet}")
+      #print(f"Sent data: {data_packet}")
 
 
 
